@@ -3,9 +3,12 @@ package services
 import (
 	"UPCSToolkit/widgets"
 	"fmt"
+	"image/color"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -110,45 +113,94 @@ func CreateReportCalidadAcademica(data [][]string) {
 	showReport(majorStats, typeCount, invalidCount)
 }
 
-func showReport(majorStats map[string][]int, typeCount []int, invalidCount int) {
-	reportWin := fyne.CurrentApp().NewWindow("Reporte Calidad Academica")
-	//invalidLabel := widget.NewLabel(fmt.Sprintf("Alumnos Invalidos: %d", invalidCount))
-	var majorKeys []string = make([]string, 0)
-	for key := range majorStats {
-		majorKeys = append(majorKeys, key)
+func getDataMatrixFromStats(stats map[string][]int, headers []string) (result [][]string) {
+	result = append(result, headers)
+	for key, value := range stats {
+		if key == "total" {
+			continue
+		}
+		row := make([]string, 0)
+		row = append(row, key)
+		row = append(row, fmt.Sprint(value[0]))
+		row = append(row, fmt.Sprint(value[1]))
+		result = append(result, row)
 	}
-	table := widget.NewTable(
+
+	return
+}
+
+func showReport(majorStats map[string][]int, typeCount []int, invalidCount int) {
+	//creates the report window
+	reportWin := fyne.CurrentApp().NewWindow("Reporte Calidad Academica")
+
+	titleLabel := canvas.NewText("Reporte de Calidad Academica", widgets.DARK_BLUE)
+	titleLabel.TextSize = 20
+
+	projectTitle := canvas.NewText(
+		"Conteo de Proyectos",
+		widgets.DARK_BLUE,
+	)
+	projectTitle.TextSize = 14
+	projectLabel := canvas.NewText(
+		fmt.Sprintf(
+			"Social-Social: %d     Academico-Social: %d     Total: %d",
+			typeCount[0], typeCount[1], typeCount[0]+typeCount[1],
+		),
+		widgets.DARK_BLUE,
+	)
+	projectLabel.TextSize = 12
+	headerContainer := container.NewVBox(titleLabel, projectTitle, projectLabel)
+
+	var majorTableData [][]string = getDataMatrixFromStats(majorStats, []string{"Carrera", "Social - Social", "Academico - Social"})
+
+	//appending the totals to the major Table
+	majorTableData = append(majorTableData, []string{"sub-total", fmt.Sprint(majorStats["total"][0]), fmt.Sprint(majorStats["total"][1])})
+	majorTableData = append(majorTableData, []string{"sub-total", fmt.Sprint(majorStats["total"][0] + majorStats["total"][1]), ""})
+	majorTable := widget.NewTable(
 		//define the dimensions of the table
-		func() (int, int) { return len(majorKeys), 3 },
+		func() (int, int) { return len(majorTableData), 3 },
+
 		//specifies the widget
-		func() fyne.CanvasObject { return widget.NewLabel("...") },
-		//update the table
+		func() fyne.CanvasObject { return canvas.NewText("...", color.Black) },
+
+		//fills the table
 		func(tci widget.TableCellID, obj fyne.CanvasObject) {
+			label := obj.(*canvas.Text)
+			//just apply bold style to the first and last row
+			label.TextStyle.Bold = (tci.Row == 0 || tci.Row >= len(majorTableData)-2)
+			label.Text = majorTableData[tci.Row][tci.Col]
+
+			if tci.Row == 0 {
+				label.Color = widgets.GOLD
+				label.Alignment = fyne.TextAlignCenter
+				return
+			}
+			label.Color = widgets.DARK_GREY
+
 			if tci.Col == 0 {
-				text := majorKeys[tci.Row]
-				if len(text) > 60 {
-					text = text[:60]
+				label.Alignment = fyne.TextAlignLeading //align left
+				if len(label.Text) > 60 {
+					label.Text = label.Text[:60]
 				}
-				obj.(*widget.Label).SetText(text)
-				obj.(*widget.Label).Resize(fyne.NewSize(500, 10))
-			} else {
-				obj.(*widget.Label).SetText(fmt.Sprintf("%d", majorStats[majorKeys[tci.Row]][tci.Col-1]))
-				obj.(*widget.Label).Resize(fyne.NewSize(100, 10))
+				if tci.Row >= len(majorTableData)-2 {
+					label.Alignment = fyne.TextAlignTrailing //align right
+				}
+				return
 			}
 
-			if majorKeys[tci.Row] == "total" {
-				obj.(*widget.Label).TextStyle.Bold = true
-			}
+			label.Alignment = fyne.TextAlignCenter
+
 		},
 	)
-	table.SetColumnWidth(0, 500)
-	table.SetColumnWidth(1, 50)
-	table.SetColumnWidth(2, 50)
-	content := container.NewCenter(table)
-	content.Resize(fyne.NewSize(600, 500))
+	majorTable.SetColumnWidth(0, 400)
+	majorTable.SetColumnWidth(1, 150)
+	majorTable.SetColumnWidth(2, 150)
+
+	reportLayout := layout.NewBorderLayout(headerContainer, nil, nil, nil)
+	reportContainer := container.New(reportLayout, headerContainer, majorTable)
 
 	//container := container.NewVBox(invalidLabel, table)
-	reportWin.Resize(fyne.NewSize(800, 500))
-	reportWin.SetContent(table)
+	reportWin.Resize(fyne.NewSize(800, 600))
+	reportWin.SetContent(reportContainer)
 	reportWin.Show()
 }
